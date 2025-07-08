@@ -11,6 +11,11 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 env:
   GO_VERSION: '1.24'
 
@@ -155,14 +160,14 @@ jobs:
           - Public hostname configuration
           - Real-time status monitoring
           - Cross-platform support
-        Homepage: https://github.com/your-username/tunnelman
+        Homepage: https://github.com/justingosan/tunnelman
         EOF
         
         # Create copyright file
         cat > debian/tunnelman/usr/share/doc/tunnelman/copyright << EOF
         Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
         Upstream-Name: tunnelman
-        Source: https://github.com/your-username/tunnelman
+        Source: https://github.com/justingosan/tunnelman
         
         Files: *
         Copyright: $(date +%Y) Tunnelman Project
@@ -200,7 +205,7 @@ jobs:
         echo "2. Configure your Cloudflare credentials in ~/.tunnelman/config.json"
         echo "3. Run: tunnelman"
         echo ""
-        echo "For more information, visit: https://github.com/your-username/tunnelman"
+        echo "For more information, visit: https://github.com/justingosan/tunnelman"
         
         exit 0
         EOF
@@ -273,7 +278,7 @@ jobs:
         #### Linux/macOS (Binary)
         ```bash
         # Download the appropriate binary for your platform
-        wget https://github.com/your-username/tunnelman/releases/download/${{ steps.version.outputs.VERSION }}/tunnelman-linux-amd64.tar.gz
+        wget https://github.com/justingosan/tunnelman/releases/download/${{ steps.version.outputs.VERSION }}/tunnelman-linux-amd64.tar.gz
         tar -xzf tunnelman-linux-amd64.tar.gz
         sudo mv tunnelman-linux-amd64 /usr/local/bin/tunnelman
         chmod +x /usr/local/bin/tunnelman
@@ -282,7 +287,7 @@ jobs:
         #### Debian/Ubuntu (Package)
         ```bash
         # Download and install the .deb package
-        wget https://github.com/your-username/tunnelman/releases/download/${{ steps.version.outputs.VERSION }}/tunnelman_*_amd64.deb
+        wget https://github.com/justingosan/tunnelman/releases/download/${{ steps.version.outputs.VERSION }}/tunnelman_*_amd64.deb
         sudo dpkg -i tunnelman_*_amd64.deb
         
         # Install dependencies if needed
@@ -294,7 +299,7 @@ jobs:
         - Configure Cloudflare API credentials
         
         ### What's Changed
-        - View the full changelog at: https://github.com/your-username/tunnelman/compare/...
+        - View the full changelog at: https://github.com/justingosan/tunnelman/compare/...
         EOF
 
     - name: Create Release

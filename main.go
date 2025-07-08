@@ -145,7 +145,7 @@ func main() {
 		fmt.Println("  Run 'tunnelman config' for interactive setup")
 		fmt.Println("  Or edit ~/.tunnelman/config.json manually")
 		fmt.Println()
-		fmt.Println("For more information, visit: https://github.com/your-username/tunnelman")
+		fmt.Println("For more information, visit: https://github.com/justingosan/tunnelman")
 		os.Exit(0)
 	}
 

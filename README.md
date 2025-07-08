@@ -17,12 +17,12 @@ Manage your Cloudflare-hosted tunnels (the ones created and configured via Cloud
 
 ### Download Binary (Recommended)
 
-Download the latest release for your platform from the [releases page](https://github.com/your-username/tunnelman/releases):
+Download the latest release for your platform from the [releases page](https://github.com/justingosan/tunnelman/releases):
 
 #### Linux
 ```bash
 # Download and install (AMD64)
-wget https://github.com/your-username/tunnelman/releases/latest/download/tunnelman-linux-amd64.tar.gz
+wget https://github.com/justingosan/tunnelman/releases/latest/download/tunnelman-linux-amd64.tar.gz
 tar -xzf tunnelman-linux-amd64.tar.gz
 sudo mv tunnelman-linux-amd64 /usr/local/bin/tunnelman
 chmod +x /usr/local/bin/tunnelman
@@ -31,7 +31,7 @@ chmod +x /usr/local/bin/tunnelman
 #### Debian/Ubuntu Package
 ```bash
 # Download and install .deb package
-wget https://github.com/your-username/tunnelman/releases/latest/download/tunnelman_*_amd64.deb
+wget https://github.com/justingosan/tunnelman/releases/latest/download/tunnelman_*_amd64.deb
 sudo dpkg -i tunnelman_*_amd64.deb
 
 # Install dependencies if needed
@@ -41,13 +41,13 @@ sudo apt-get install -f
 #### macOS
 ```bash
 # Intel Macs
-wget https://github.com/your-username/tunnelman/releases/latest/download/tunnelman-darwin-amd64.tar.gz
+wget https://github.com/justingosan/tunnelman/releases/latest/download/tunnelman-darwin-amd64.tar.gz
 tar -xzf tunnelman-darwin-amd64.tar.gz
 sudo mv tunnelman-darwin-amd64 /usr/local/bin/tunnelman
 chmod +x /usr/local/bin/tunnelman
 
 # Apple Silicon Macs
-wget https://github.com/your-username/tunnelman/releases/latest/download/tunnelman-darwin-arm64.tar.gz
+wget https://github.com/justingosan/tunnelman/releases/latest/download/tunnelman-darwin-arm64.tar.gz
 tar -xzf tunnelman-darwin-arm64.tar.gz
 sudo mv tunnelman-darwin-arm64 /usr/local/bin/tunnelman
 chmod +x /usr/local/bin/tunnelman
@@ -84,7 +84,7 @@ If you prefer to build from source or need the latest development version:
 
 ```bash
 # Prerequisites: Go 1.24.4 or later
-git clone https://github.com/your-username/tunnelman.git
+git clone https://github.com/justingosan/tunnelman.git
 cd tunnelman
 go build -o tunnelman .
 ```
@@ -260,7 +260,7 @@ Supports both API keys and API tokens:
 
 ```bash
 # Clone your fork
-git clone https://github.com/your-username/tunnelman.git
+git clone https://github.com/justingosan/tunnelman.git
 cd tunnelman
 
 # Install dependencies
