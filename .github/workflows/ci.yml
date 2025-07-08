@@ -1,0 +1,67 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.24'
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Build application
+      run: make build
+
+    - name: Validate code
+      run: |
+        # Validate that the code compiles and basic checks pass
+        make fmt
+        make vet
+        echo "✅ Code validation completed"
+
+  lint-and-format:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Run linter
+      run: make lint
+
+    - name: Check formatting
+      run: |
+        make fmt
+        if [ -n "$(git diff --name-only)" ]; then
+          echo "Code is not properly formatted. Please run 'make fmt'"
+          git diff
+          exit 1
+        fi
+
+    - name: Run go vet
+      run: make vet

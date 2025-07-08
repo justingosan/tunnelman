@@ -275,7 +275,7 @@ func (m Model) openTunnelInBrowser(tunnelID string) tea.Cmd {
 		}
 
 		url := fmt.Sprintf("https://one.dash.cloudflare.com/%s/networks/tunnels/cfd_tunnel/%s/edit?tab=publicHostname", accountID, tunnelID)
-		
+
 		// Use different commands based on the operating system
 		var cmd *exec.Cmd
 		switch runtime.GOOS {
@@ -727,7 +727,6 @@ func (m Model) handleFormInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-
 func (m Model) deleteTunnel() tea.Cmd {
 	if m.selectedTunnel >= len(m.tunnelsList) {
 		return nil
@@ -935,7 +934,7 @@ func (m Model) renderTunnelsTab() string {
 		// Get tunnel status
 		status := "DOWN"
 		statusColor := lipgloss.Color("#EF4444") // Red for DOWN
-		
+
 		if tunnelStatus, exists := m.tunnelStatuses[tunnel.ID]; exists {
 			switch tunnelStatus {
 			case models.StatusActive:
@@ -1160,7 +1159,7 @@ func (m Model) renderAddHostnameForm(title string) string {
 	var preview string
 	hostname := ""
 	service := ""
-	
+
 	// Safely get values from text inputs
 	if len(m.textInputs) > 0 {
 		hostname = m.textInputs[0].Value()
