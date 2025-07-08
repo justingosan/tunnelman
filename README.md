@@ -1,21 +1,17 @@
 # Tunnelman
 
-A modern Terminal User Interface (TUI) for managing Cloudflare Tunnels with enhanced hostname management and intuitive navigation.
+A Terminal User Interface (TUI) for managing remotely-managed Cloudflare Tunnels locally without needing the web browser.
 
-## Hero Demo
-
-<!-- Add your demo video here -->
-*Demo video coming soon...*
+Manage your Cloudflare-hosted tunnels (the ones created and configured via Cloudflare dashboard) directly from your terminal with real-time status monitoring and hostname management.
 
 ## Features
 
-- **Interactive TUI**: Built with Bubble Tea for smooth terminal interactions
-- **Tunnel Management**: Create, list, and delete Cloudflare tunnels
-- **Hostname Management**: Add, edit, and remove public hostnames with ease
-- **Domain Dropdown**: Select from available domains in your Cloudflare account
-- **Real-time Status**: Monitor tunnel status and domain counts
-- **Hierarchical Navigation**: Intuitive escape key navigation between views
-- **Comprehensive Testing**: Full E2E test suite with automatic cleanup
+- **Local Management of Remote Tunnels** - control Cloudflare-hosted tunnels from your terminal
+- **No Web Browser Required** - full tunnel management without opening the dashboard
+- **Real-time Status** - view tunnel health (HEALTHY/DOWN) instantly
+- **Hostname Management** - add, edit, delete public hostnames
+- **Browser Integration** - press 'o' to open specific tunnel config when needed
+- **Cross-platform** binaries and Debian packages
 
 ## Installation
 
