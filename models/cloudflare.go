@@ -177,7 +177,7 @@ func (c *CloudflareClient) execCommand(name string, args ...string) ([]byte, err
 }
 
 func (c *CloudflareClient) ListTunnels(ctx context.Context) ([]CLITunnel, error) {
-	output, err := c.execCommand("cloudflared", "tunnel", "list", "--output", "json")
+	output, err := c.execCommand("cloudflared", "tunnel", "--output", "json", "list")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tunnels: %w", err)
 	}
@@ -191,7 +191,7 @@ func (c *CloudflareClient) ListTunnels(ctx context.Context) ([]CLITunnel, error)
 }
 
 func (c *CloudflareClient) CreateTunnel(ctx context.Context, name string) (*CLITunnel, error) {
-	output, err := c.execCommand("cloudflared", "tunnel", "create", name, "--output", "json")
+	output, err := c.execCommand("cloudflared", "tunnel", "--output", "json", "create", name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tunnel: %w", err)
 	}
@@ -213,7 +213,7 @@ func (c *CloudflareClient) DeleteTunnel(ctx context.Context, nameOrID string) er
 }
 
 func (c *CloudflareClient) GetTunnelInfo(ctx context.Context, nameOrID string) (*CLITunnel, error) {
-	output, err := c.execCommand("cloudflared", "tunnel", "info", "--output", "json", nameOrID)
+	output, err := c.execCommand("cloudflared", "tunnel", "--output", "json", "info", nameOrID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tunnel info: %w", err)
 	}
@@ -492,10 +492,24 @@ func (c *CloudflareClient) UpdatePublicHostname(ctx context.Context, tunnelID, o
 		return fmt.Errorf("hostname %s not found", originalHostname)
 	}
 
+	// Set defaults
+	if path == "" {
+		path = "*"
+	}
+	if service == "" {
+		service = "http://localhost:8080"
+	}
+
 	// Update the fields
 	ingressToUpdate.Hostname = newHostname
-	ingressToUpdate.Path = path
 	ingressToUpdate.Service = service
+	
+	// Only set path if it's not "*"
+	if path != "*" {
+		ingressToUpdate.Path = path
+	} else {
+		ingressToUpdate.Path = ""
+	}
 
 	// Update the tunnel configuration
 	return c.UpdateTunnelConfiguration(ctx, tunnelID, &config.Config)
@@ -515,7 +529,12 @@ func (c *CloudflareClient) RemovePublicHostname(ctx context.Context, tunnelID, h
 	// Find and remove the ingress rule
 	found := false
 	for i, ingress := range config.Config.Ingress {
-		if ingress.Hostname == hostname && ingress.Path == path {
+		// Handle path matching: empty path in config means "*"
+		ingressPath := ingress.Path
+		if ingressPath == "" {
+			ingressPath = "*"
+		}
+		if ingress.Hostname == hostname && ingressPath == path {
 			config.Config.Ingress = append(config.Config.Ingress[:i], config.Config.Ingress[i+1:]...)
 			found = true
 			break

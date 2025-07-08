@@ -156,7 +156,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Handle form input mode separately
-		if m.showAddHostname {
+		if m.showAddHostname || m.showEditHostname {
 			return m.handleFormInput(msg)
 		}
 
@@ -282,11 +282,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusMsg:
 		m.statusMessage = string(msg)
 		m.loading = false
-		// If we just created a public hostname, reload the tunnel hostnames
-		if m.showTunnelHostnames && m.selectedTunnelName != "" && m.selectedTunnelID != "" &&
-			len(m.statusMessage) > len("Successfully created public hostname:") &&
-			m.statusMessage[:len("Successfully created public hostname:")] == "Successfully created public hostname:" {
-			cmds = append(cmds, m.loadTunnelHostnames(m.selectedTunnelID))
+		// If we just created or updated a public hostname, reload the tunnel hostnames
+		if m.showTunnelHostnames && m.selectedTunnelName != "" && m.selectedTunnelID != "" {
+			if (len(m.statusMessage) > len("Successfully created public hostname:") &&
+				m.statusMessage[:len("Successfully created public hostname:")] == "Successfully created public hostname:") ||
+				(len(m.statusMessage) > len("Successfully updated public hostname:") &&
+				m.statusMessage[:len("Successfully updated public hostname:")] == "Successfully updated public hostname:") {
+				cmds = append(cmds, m.loadTunnelHostnames(m.selectedTunnelID))
+			}
 		}
 	}
 
@@ -757,7 +760,7 @@ func (m Model) renderTunnelHostnamesView() string {
 		Italic(true).
 		Align(lipgloss.Center).
 		Width(m.width - 8).
-		Render("Press 'a' to add public hostname • Spacebar/Escape to return to tunnels list")
+		Render("Press 'a' to add, 'e' to edit • Spacebar/Escape to return to tunnels list")
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.JoinVertical(lipgloss.Left, rows...),
