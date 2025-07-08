@@ -95,11 +95,21 @@ go build -o tunnelman .
 2. **Create Custom Token**: Choose "Custom token" with permissions:
    - `Account:Cloudflare Tunnel:Edit`
 3. **Install cloudflared**: `brew install cloudflared` (or see [Installation](#installation))
-4. **Configure tunnelman**: Edit `~/.tunnelman/config.json` with your token
+4. **Configure tunnelman**: Run `tunnelman config` for interactive setup
 
 ## Configuration
 
-Create a configuration file at `~/.tunnelman/config.json`:
+### Interactive Setup (Recommended)
+
+```bash
+tunnelman config
+```
+
+This will guide you through setting up your Cloudflare API credentials interactively.
+
+### Manual Configuration
+
+Alternatively, create `~/.tunnelman/config.json`:
 
 ```json
 {
