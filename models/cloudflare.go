@@ -276,6 +276,14 @@ func (c *CloudflareClient) CreateTunnelDNSRecord(ctx context.Context, tunnelName
 	return nil
 }
 
+func (c *CloudflareClient) DeleteTunnelDNSRecord(ctx context.Context, hostname string) error {
+	_, err := c.execCommand("cloudflared", "tunnel", "route", "dns", "delete", hostname)
+	if err != nil {
+		return fmt.Errorf("failed to delete tunnel DNS record: %w", err)
+	}
+	return nil
+}
+
 func (c *CloudflareClient) ValidateConfig(configPath string) error {
 	args := []string{"tunnel", "ingress", "validate"}
 	if configPath != "" {

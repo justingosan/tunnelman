@@ -45,6 +45,8 @@ type Model struct {
 	selectedDomainIndex   int
 	tunnelDomainCounts    map[string]int
 	tunnelStatuses        map[string]models.TunnelStatus
+	showDeleteConfirm     bool
+	deleteTarget          string // "hostname" or "tunnel"
 }
 
 type tickMsg time.Time
@@ -263,6 +265,39 @@ func (m Model) deleteTunnelHostname() tea.Cmd {
 	})
 }
 
+func (m Model) deleteTunnelHostnameWithDNS() tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		if m.client == nil {
+			return errorMsg("Cloudflare client not initialized - check your API credentials")
+		}
+
+		hostname := m.selectedHostname.Hostname
+		path := m.selectedHostname.Path
+		if path == "" {
+			path = "*"
+		}
+
+		ctx := context.Background()
+
+		// First remove the public hostname from tunnel config
+		err := m.client.RemovePublicHostname(ctx, m.selectedTunnelID, hostname, path)
+		if err != nil {
+			return errorMsg(fmt.Sprintf("Failed to delete public hostname: %v", err))
+		}
+
+		// Then try to delete the DNS record
+		// Note: This might fail if DNS was managed differently, but we'll try anyway
+		err = m.client.DeleteTunnelDNSRecord(ctx, hostname)
+		if err != nil {
+			// Don't fail the whole operation if DNS deletion fails
+			// Many users might not have DNS records managed by cloudflared
+			return statusMsg(fmt.Sprintf("Deleted hostname: %s (DNS record deletion failed - might not exist or be managed externally)", hostname))
+		}
+
+		return statusMsg(fmt.Sprintf("Successfully deleted hostname: %s and its DNS record", hostname))
+	})
+}
+
 func (m Model) openTunnelInBrowser(tunnelID string) tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
 		if m.client == nil {
@@ -353,15 +388,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "d":
-			if m.showTunnelHostnames && !m.showAddHostname && !m.showEditHostname && len(m.tunnelHostnames) > 0 {
-				// Delete hostname when in hostname view
+			if m.showDeleteConfirm {
+				// Handle deletion confirmation
+				if m.deleteTarget == "hostname" {
+					m.loading = true
+					m.statusMessage = fmt.Sprintf("Deleting public hostname: %s", m.selectedHostname.Hostname)
+					cmds = append(cmds, m.deleteTunnelHostnameWithDNS())
+				} else if m.deleteTarget == "tunnel" {
+					cmds = append(cmds, m.deleteTunnel())
+				}
+				m.showDeleteConfirm = false
+				m.deleteTarget = ""
+			} else if m.showTunnelHostnames && !m.showAddHostname && !m.showEditHostname && len(m.tunnelHostnames) > 0 {
+				// Show confirmation for hostname deletion
 				m.selectedHostname = m.tunnelHostnames[m.selectedHostnameIndex]
-				m.loading = true
-				m.statusMessage = fmt.Sprintf("Deleting public hostname: %s", m.selectedHostname.Hostname)
-				cmds = append(cmds, m.deleteTunnelHostname())
+				m.showDeleteConfirm = true
+				m.deleteTarget = "hostname"
+				m.statusMessage = fmt.Sprintf("Delete hostname %s and its DNS record? Press 'd' to confirm, 'esc' to cancel", m.selectedHostname.Hostname)
 			} else if !m.showTunnelHostnames && len(m.tunnelsList) > 0 {
-				// Delete tunnel when in main tunnel view
-				cmds = append(cmds, m.deleteTunnel())
+				// Show confirmation for tunnel deletion
+				m.showDeleteConfirm = true
+				m.deleteTarget = "tunnel"
+				tunnel := m.tunnelsList[m.selectedTunnel]
+				m.statusMessage = fmt.Sprintf("Delete tunnel %s? Press 'd' to confirm, 'esc' to cancel", tunnel.Name)
 			}
 
 		case " ":
@@ -384,8 +433,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "esc", "escape":
-			// Close help if open
-			if m.showHelp {
+			// Cancel delete confirmation if active
+			if m.showDeleteConfirm {
+				m.showDeleteConfirm = false
+				m.deleteTarget = ""
+				m.statusMessage = "Deletion cancelled"
+			} else if m.showHelp {
+				// Close help if open
 				m.showHelp = false
 				m.state.ToggleHelp()
 				m.statusMessage = "Closed help"
@@ -1272,7 +1326,7 @@ func (m Model) renderFooter() string {
 	if m.showAddHostname || m.showEditHostname {
 		help = "Tab: Next field • Up/Down: Select domain • Enter: Submit • Escape: Cancel • q: Quit"
 	} else if m.showTunnelHostnames {
-		help = "a: Add hostname • e: Edit selected • d: Delete selected • Escape: Back to tunnels • r: Refresh • c: Clear errors • h: Help • q: Quit"
+		help = "a: Add hostname • e: Edit selected • d: Delete (with DNS) • Escape: Back to tunnels • r: Refresh • c: Clear errors • h: Help • q: Quit"
 	} else {
 		help = "↑↓: Navigate • Enter/Space: View hostnames • d: Delete tunnel • Escape: Close help • r: Refresh • h: Help • q: Quit"
 	}
@@ -1313,7 +1367,7 @@ func (m Model) renderHelp() string {
 		fmt.Sprintf("  %s           %s", keyStyle.Render("o"), descStyle.Render("Open tunnel configuration in browser (works in both tunnel and hostname views)")),
 		fmt.Sprintf("  %s           %s", keyStyle.Render("a"), descStyle.Render("Add public hostname (in tunnel hostname view)")),
 		fmt.Sprintf("  %s           %s", keyStyle.Render("e"), descStyle.Render("Edit public hostname (in tunnel hostname view)")),
-		fmt.Sprintf("  %s           %s", keyStyle.Render("d"), descStyle.Render("Delete selected tunnel or hostname (context-sensitive)")),
+		fmt.Sprintf("  %s           %s", keyStyle.Render("d"), descStyle.Render("Delete selected tunnel or hostname (with confirmation + DNS cleanup)")),
 		"",
 		"HOSTNAME OPERATIONS:",
 		fmt.Sprintf("  %s           %s", keyStyle.Render("Tab"), descStyle.Render("Navigate between hostname form fields")),
