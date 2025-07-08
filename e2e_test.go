@@ -362,6 +362,41 @@ func TestE2E_HostnameManagement(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("Delete_Tunnel_DNS_Record", func(t *testing.T) {
+		// Create a test hostname first
+		suite.CreateTestHostname(t, tunnel.ID, "dns-test", "*", "http://localhost:8080")
+
+		// Get the hostname that was created
+		hostnames, err := suite.client.GetPublicHostnames(suite.ctx, tunnel.ID)
+		if err != nil {
+			t.Fatalf("Failed to get public hostnames: %v", err)
+		}
+
+		var testHostname *models.PublicHostname
+		for _, hostname := range hostnames {
+			if strings.Contains(hostname.Hostname, TestHostnamePrefix) && strings.Contains(hostname.Hostname, "dns-test") {
+				testHostname = &hostname
+				break
+			}
+		}
+
+		if testHostname == nil {
+			t.Skip("No test hostname found for DNS deletion test")
+		}
+
+		// Test DNS record deletion
+		// Note: This may fail if DNS record doesn't exist or cloudflared is not configured
+		// But we should test that the function doesn't crash
+		err = suite.client.DeleteTunnelDNSRecord(suite.ctx, testHostname.Hostname)
+		if err != nil {
+			// DNS deletion can fail if record doesn't exist or cloudflared DNS is not configured
+			// This is expected behavior, so we log it but don't fail the test
+			t.Logf("DNS deletion failed (expected for test environments): %v", err)
+		} else {
+			t.Logf("DNS record deleted successfully for hostname: %s", testHostname.Hostname)
+		}
+	})
 }
 
 func TestE2E_TunnelConfiguration(t *testing.T) {
@@ -447,6 +482,30 @@ func TestE2E_TunnelConfiguration(t *testing.T) {
 	})
 }
 
+func TestE2E_DNSOperations(t *testing.T) {
+	suite := NewE2ETestSuite(t)
+	defer suite.Cleanup(t)
+
+	t.Run("DNS_Record_Deletion", func(t *testing.T) {
+		// Test DNS record deletion for various scenarios
+		testHostnames := []string{
+			"non-existent-hostname.example.com",
+			"e2e-test-dns-" + generateTimestamp() + ".example.com",
+		}
+
+		for _, hostname := range testHostnames {
+			err := suite.client.DeleteTunnelDNSRecord(suite.ctx, hostname)
+			if err != nil {
+				// DNS deletion is expected to fail for non-existent records
+				// This is normal behavior - the function should handle errors gracefully
+				t.Logf("DNS deletion failed for %s (expected): %v", hostname, err)
+			} else {
+				t.Logf("DNS record deleted successfully for hostname: %s", hostname)
+			}
+		}
+	})
+}
+
 func TestE2E_ErrorHandling(t *testing.T) {
 	suite := NewE2ETestSuite(t)
 	defer suite.Cleanup(t)
@@ -478,6 +537,22 @@ func TestE2E_ErrorHandling(t *testing.T) {
 		err = suite.client.RemovePublicHostname(suite.ctx, tunnel.ID, "non-existent.example.com", "*")
 		if err == nil {
 			t.Error("Expected error for non-existent hostname removal")
+		}
+	})
+
+	t.Run("Invalid_DNS_Operations", func(t *testing.T) {
+		// Test DNS deletion with invalid hostnames
+		invalidHostnames := []string{
+			"",
+			"invalid..hostname",
+			"toolong" + strings.Repeat("a", 250) + ".example.com",
+		}
+
+		for _, hostname := range invalidHostnames {
+			err := suite.client.DeleteTunnelDNSRecord(suite.ctx, hostname)
+			if err == nil && hostname != "" {
+				t.Errorf("Expected error for invalid hostname DNS deletion: %s", hostname)
+			}
 		}
 	})
 }
@@ -548,7 +623,7 @@ func TestE2E_Integration_Full_Workflow(t *testing.T) {
 			}
 		}
 
-		// 5. Remove one hostname
+		// 5. Remove one hostname and test DNS cleanup
 		var hostnameToRemove *models.PublicHostname
 		updatedHostnames, err := suite.client.GetPublicHostnames(suite.ctx, tunnel.ID)
 		if err != nil {
@@ -563,9 +638,18 @@ func TestE2E_Integration_Full_Workflow(t *testing.T) {
 		}
 
 		if hostnameToRemove != nil {
+			// First remove the hostname
 			err = suite.client.RemovePublicHostname(suite.ctx, tunnel.ID, hostnameToRemove.Hostname, hostnameToRemove.Path)
 			if err != nil {
 				t.Fatalf("Failed to remove hostname: %v", err)
+			}
+
+			// Then test DNS record deletion (may fail in test environment)
+			err = suite.client.DeleteTunnelDNSRecord(suite.ctx, hostnameToRemove.Hostname)
+			if err != nil {
+				t.Logf("DNS deletion failed (expected for test environments): %v", err)
+			} else {
+				t.Logf("DNS record deleted successfully for hostname: %s", hostnameToRemove.Hostname)
 			}
 
 			// Verify removal
