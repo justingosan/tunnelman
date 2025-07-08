@@ -269,20 +269,14 @@ PUT /accounts/{account_id}/cfd_tunnel/{tunnel_id}
 DELETE /accounts/{account_id}/cfd_tunnel/{tunnel_id}
 ```
 
-### DNS Management
+### Configuration Management
 
 ```go
-// List DNS records
-GET /zones/{zone_id}/dns_records
+// Get tunnel configuration
+GET /accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations
 
-// Create DNS record
-POST /zones/{zone_id}/dns_records
-
-// Update DNS record
-PUT /zones/{zone_id}/dns_records/{record_id}
-
-// Delete DNS record
-DELETE /zones/{zone_id}/dns_records/{record_id}
+// Update tunnel configuration
+PUT /accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations
 ```
 
 ## Environment Variables
@@ -353,9 +347,9 @@ cloudflared tunnel --url http://localhost:3000 --name dev-tunnel
    - Ensure proper permissions
 
 2. **DNS Resolution Issues**
-   - Verify DNS records are created
-   - Check propagation status
-   - Confirm zone ID is correct
+   - Verify DNS routes are created via cloudflared
+   - Check DNS propagation status
+   - Confirm tunnel routing is configured
 
 3. **Service Connection Issues**
    - Verify local service is running
@@ -396,8 +390,8 @@ The Tunnelman TUI application uses these commands and APIs to:
 - **List and manage tunnels** using `cloudflared tunnel list` and API calls
 - **Create/delete tunnels** via CLI commands and API
 - **Monitor tunnel status** through API polling
-- **Manage DNS records** via Cloudflare API
-- **Handle configuration** by reading/writing config files
-- **Display logs** by parsing cloudflared output
+- **Manage hostname routing** via tunnel configuration API
+- **Handle DNS routing** using `cloudflared tunnel route dns` commands
+- **Display real-time status** through status API calls
 
 For more information, see the [official Cloudflare Tunnel documentation](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/).

@@ -13,16 +13,16 @@ import (
 )
 
 const (
-	TestTunnelPrefix = "e2e-test-"
+	TestTunnelPrefix   = "e2e-test-"
 	TestHostnamePrefix = "e2e-test-"
 )
 
 type E2ETestSuite struct {
-	client       *models.CloudflareClient
-	config       *models.Config
-	createdTunnels []string
+	client           *models.CloudflareClient
+	config           *models.Config
+	createdTunnels   []string
 	createdHostnames []string
-	ctx          context.Context
+	ctx              context.Context
 }
 
 func NewE2ETestSuite(t *testing.T) *E2ETestSuite {
@@ -54,7 +54,7 @@ func NewE2ETestSuite(t *testing.T) *E2ETestSuite {
 
 func (s *E2ETestSuite) Cleanup(t *testing.T) {
 	log.Printf("Cleaning up %d tunnels and %d hostnames", len(s.createdTunnels), len(s.createdHostnames))
-	
+
 	// Clean up tunnels (this also removes associated hostnames)
 	for _, tunnelName := range s.createdTunnels {
 		if err := s.client.DeleteTunnel(s.ctx, tunnelName); err != nil {
@@ -64,28 +64,12 @@ func (s *E2ETestSuite) Cleanup(t *testing.T) {
 		}
 	}
 
-	// Clean up any remaining test hostnames in DNS
-	if s.config.CloudflareZoneID != "" {
-		records, err := s.client.ListDNSRecords(s.ctx)
-		if err != nil {
-			t.Logf("Warning: Failed to list DNS records for cleanup: %v", err)
-		} else {
-			for _, record := range records {
-				if strings.HasPrefix(record.Name, TestHostnamePrefix) {
-					if err := s.client.DeleteDNSRecord(s.ctx, record.ID); err != nil {
-						t.Logf("Warning: Failed to cleanup DNS record %s: %v", record.Name, err)
-					} else {
-						log.Printf("Cleaned up DNS record: %s", record.Name)
-					}
-				}
-			}
-		}
-	}
+	// Note: DNS cleanup is no longer needed as we use cloudflared CLI for DNS management
 }
 
 func (s *E2ETestSuite) CreateTestTunnel(t *testing.T, name string) *models.CLITunnel {
 	fullName := TestTunnelPrefix + name + "-" + generateTimestamp()
-	
+
 	tunnel, err := s.client.CreateTunnel(s.ctx, fullName)
 	if err != nil {
 		t.Fatalf("Failed to create test tunnel %s: %v", fullName, err)
@@ -158,7 +142,7 @@ func TestE2E_TunnelLifecycle(t *testing.T) {
 
 	t.Run("Create_Tunnel", func(t *testing.T) {
 		tunnel := suite.CreateTestTunnel(t, "lifecycle")
-		
+
 		if tunnel.Name == "" {
 			t.Error("Created tunnel should have a name")
 		}
@@ -227,7 +211,7 @@ func TestE2E_HostnameManagement(t *testing.T) {
 
 	t.Run("Add_Public_Hostname", func(t *testing.T) {
 		suite.CreateTestHostname(t, tunnel.ID, "api", "*", "http://localhost:8080")
-		
+
 		// Verify hostname was added
 		hostnames, err := suite.client.GetPublicHostnames(suite.ctx, tunnel.ID)
 		if err != nil {
@@ -252,7 +236,7 @@ func TestE2E_HostnameManagement(t *testing.T) {
 	t.Run("Update_Public_Hostname", func(t *testing.T) {
 		// Create a hostname to update first
 		suite.CreateTestHostname(t, tunnel.ID, "update-test", "*", "http://localhost:8080")
-		
+
 		// Get current hostnames
 		hostnames, err := suite.client.GetPublicHostnames(suite.ctx, tunnel.ID)
 		if err != nil {
@@ -307,7 +291,7 @@ func TestE2E_HostnameManagement(t *testing.T) {
 	t.Run("List_Public_Hostnames", func(t *testing.T) {
 		// Ensure tunnel has configuration first
 		suite.ensureTunnelConfiguration(t, tunnel.ID)
-		
+
 		hostnames, err := suite.client.GetPublicHostnames(suite.ctx, tunnel.ID)
 		if err != nil {
 			t.Fatalf("Failed to list public hostnames: %v", err)
@@ -332,7 +316,7 @@ func TestE2E_HostnameManagement(t *testing.T) {
 	t.Run("Remove_Public_Hostname", func(t *testing.T) {
 		// Create a hostname to remove first
 		suite.CreateTestHostname(t, tunnel.ID, "remove-test", "*", "http://localhost:8080")
-		
+
 		// Get current hostnames
 		hostnames, err := suite.client.GetPublicHostnames(suite.ctx, tunnel.ID)
 		if err != nil {
@@ -389,7 +373,7 @@ func TestE2E_TunnelConfiguration(t *testing.T) {
 	t.Run("Get_Tunnel_Configuration", func(t *testing.T) {
 		// Ensure tunnel has configuration
 		suite.ensureTunnelConfiguration(t, tunnel.ID)
-		
+
 		config, err := suite.client.GetTunnelConfiguration(suite.ctx, tunnel.ID)
 		if err != nil {
 			t.Fatalf("Failed to get tunnel configuration: %v", err)
@@ -407,7 +391,7 @@ func TestE2E_TunnelConfiguration(t *testing.T) {
 	t.Run("Update_Tunnel_Configuration", func(t *testing.T) {
 		// Ensure tunnel has configuration
 		suite.ensureTunnelConfiguration(t, tunnel.ID)
-		
+
 		// Get current config
 		config, err := suite.client.GetTunnelConfiguration(suite.ctx, tunnel.ID)
 		if err != nil {
@@ -427,7 +411,7 @@ func TestE2E_TunnelConfiguration(t *testing.T) {
 
 		// Insert before catch-all rule (last rule)
 		if len(config.Config.Ingress) > 0 {
-			config.Config.Ingress = append(config.Config.Ingress[:len(config.Config.Ingress)-1], 
+			config.Config.Ingress = append(config.Config.Ingress[:len(config.Config.Ingress)-1],
 				newIngress, config.Config.Ingress[len(config.Config.Ingress)-1])
 		} else {
 			config.Config.Ingress = append(config.Config.Ingress, newIngress)
@@ -620,7 +604,7 @@ func TestE2E_Integration_Full_Workflow(t *testing.T) {
 func TestMain(m *testing.M) {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	
+
 	log.Println("Starting E2E tests...")
 	code := m.Run()
 	log.Println("E2E tests completed")

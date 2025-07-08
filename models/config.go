@@ -15,7 +15,6 @@ const (
 type Config struct {
 	CloudflareAPIKey   string `json:"cloudflare_api_key"`
 	CloudflareEmail    string `json:"cloudflare_email"`
-	CloudflareZoneID   string `json:"cloudflare_zone_id"`
 	TunnelConfigPath   string `json:"tunnel_config_path"`
 	AutoRefreshSeconds int    `json:"auto_refresh_seconds"`
 	LogLevel           string `json:"log_level"`
@@ -62,7 +61,7 @@ func (c *Config) Save() error {
 
 func LoadConfig() (*Config, error) {
 	configPath := GetConfigPath()
-	
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		config := DefaultConfig()
 		if err := config.Save(); err != nil {
@@ -88,7 +87,7 @@ func (s *AppState) SaveToFile(path string) error {
 	if path == "" {
 		path = s.ConfigPath
 	}
-	
+
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -144,7 +143,7 @@ func (s *AppState) Backup() error {
 	if s.ConfigPath == "" {
 		return fmt.Errorf("no config path set")
 	}
-	
+
 	backupPath := s.ConfigPath + ".backup"
 	return s.SaveToFile(backupPath)
 }

@@ -1,0 +1,56 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Build artifacts
+/dist/
+/build/
+tunnelman
+tunnelman-*
+
+# Go workspace file
+go.work
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test coverage
+coverage.html
+coverage.out
+
+# Demo files (these might be generated)
+demo.cast
+demo.svg
+
+# Configuration files with sensitive data
+config.json
+.tunnelman/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,0 +1,325 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  GO_VERSION: '1.24'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            extension: .exe
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Needed for git describe
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Install dependencies
+      run: make deps
+
+    - name: Run tests
+      run: make test
+
+    - name: Set version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+
+    - name: Build binary
+      run: |
+        mkdir -p dist
+        GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
+          -ldflags "-X main.version=${{ steps.version.outputs.VERSION }}" \
+          -o dist/tunnelman-${{ matrix.suffix }}${{ matrix.extension }} \
+          main.go
+
+    - name: Create tarball (Unix)
+      if: matrix.goos != 'windows'
+      run: |
+        cd dist
+        tar -czf tunnelman-${{ matrix.suffix }}.tar.gz tunnelman-${{ matrix.suffix }}
+        chmod +x tunnelman-${{ matrix.suffix }}
+
+    - name: Create zip (Windows)
+      if: matrix.goos == 'windows'
+      run: |
+        cd dist
+        zip tunnelman-${{ matrix.suffix }}.zip tunnelman-${{ matrix.suffix }}.exe
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: tunnelman-${{ matrix.suffix }}
+        path: |
+          dist/tunnelman-${{ matrix.suffix }}*
+        retention-days: 5
+
+  package-debian:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download Linux AMD64 binary
+      uses: actions/download-artifact@v3
+      with:
+        name: tunnelman-linux-amd64
+        path: dist/
+
+    - name: Set version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        # Remove 'v' prefix for Debian versioning
+        DEB_VERSION=${VERSION#v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "DEB_VERSION=$DEB_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Create Debian package structure
+      run: |
+        mkdir -p debian/tunnelman/DEBIAN
+        mkdir -p debian/tunnelman/usr/bin
+        mkdir -p debian/tunnelman/usr/share/doc/tunnelman
+        mkdir -p debian/tunnelman/usr/share/man/man1
+        
+        # Copy binary
+        cp dist/tunnelman-linux-amd64 debian/tunnelman/usr/bin/tunnelman
+        chmod +x debian/tunnelman/usr/bin/tunnelman
+        
+        # Create control file
+        cat > debian/tunnelman/DEBIAN/control << EOF
+        Package: tunnelman
+        Version: ${{ steps.version.outputs.DEB_VERSION }}
+        Section: utils
+        Priority: optional
+        Architecture: amd64
+        Depends: cloudflared
+        Maintainer: Tunnelman Project <noreply@github.com>
+        Description: Terminal User Interface for managing Cloudflare Tunnels
+         Tunnelman is a modern TUI application for managing Cloudflare Tunnels
+         with enhanced hostname management and intuitive navigation.
+         .
+         Features include:
+          - Interactive tunnel management
+          - Public hostname configuration
+          - Real-time status monitoring
+          - Cross-platform support
+        Homepage: https://github.com/your-username/tunnelman
+        EOF
+        
+        # Create copyright file
+        cat > debian/tunnelman/usr/share/doc/tunnelman/copyright << EOF
+        Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+        Upstream-Name: tunnelman
+        Source: https://github.com/your-username/tunnelman
+        
+        Files: *
+        Copyright: $(date +%Y) Tunnelman Project
+        License: MIT
+        
+        License: MIT
+         Permission is hereby granted, free of charge, to any person obtaining a
+         copy of this software and associated documentation files (the "Software"),
+         to deal in the Software without restriction, including without limitation
+         the rights to use, copy, modify, merge, publish, distribute, sublicense,
+         and/or sell copies of the Software, and to permit persons to whom the
+         Software is furnished to do so, subject to the following conditions:
+         .
+         The above copyright notice and this permission notice shall be included
+         in all copies or substantial portions of the Software.
+         .
+         THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+         OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+         FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+         THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+         OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+         ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+         OTHER DEALINGS IN THE SOFTWARE.
+        EOF
+        
+        # Create postinst script
+        cat > debian/tunnelman/DEBIAN/postinst << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "Tunnelman has been installed successfully!"
+        echo ""
+        echo "To get started:"
+        echo "1. Install cloudflared: https://github.com/cloudflare/cloudflared"
+        echo "2. Configure your Cloudflare credentials in ~/.tunnelman/config.json"
+        echo "3. Run: tunnelman"
+        echo ""
+        echo "For more information, visit: https://github.com/your-username/tunnelman"
+        
+        exit 0
+        EOF
+        chmod 755 debian/tunnelman/DEBIAN/postinst
+
+    - name: Build Debian package
+      run: |
+        dpkg-deb --build debian/tunnelman
+        mv debian/tunnelman.deb dist/tunnelman_${{ steps.version.outputs.DEB_VERSION }}_amd64.deb
+
+    - name: Upload Debian package
+      uses: actions/upload-artifact@v3
+      with:
+        name: tunnelman-debian
+        path: dist/tunnelman_*.deb
+        retention-days: 5
+
+  create-release:
+    needs: [build, package-debian]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+
+    - name: Set version
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Prepare release assets
+      run: |
+        mkdir -p release/
+        
+        # Copy all build artifacts
+        find artifacts/ -name "*.tar.gz" -exec cp {} release/ \;
+        find artifacts/ -name "*.zip" -exec cp {} release/ \;
+        find artifacts/ -name "*.deb" -exec cp {} release/ \;
+        
+        # List all files that will be released
+        echo "Release assets:"
+        ls -la release/
+
+    - name: Generate release notes
+      run: |
+        cat > release_notes.md << 'EOF'
+        ## Release ${{ steps.version.outputs.VERSION }}
+        
+        ### Downloads
+        
+        #### Binaries
+        - **Linux AMD64**: `tunnelman-linux-amd64.tar.gz`
+        - **Linux ARM64**: `tunnelman-linux-arm64.tar.gz`
+        - **macOS Intel**: `tunnelman-darwin-amd64.tar.gz`
+        - **macOS Apple Silicon**: `tunnelman-darwin-arm64.tar.gz`
+        - **Windows**: `tunnelman-windows-amd64.zip`
+        
+        #### Packages
+        - **Debian/Ubuntu**: `tunnelman_*_amd64.deb`
+        
+        ### Installation
+        
+        #### Linux/macOS (Binary)
+        ```bash
+        # Download the appropriate binary for your platform
+        wget https://github.com/your-username/tunnelman/releases/download/${{ steps.version.outputs.VERSION }}/tunnelman-linux-amd64.tar.gz
+        tar -xzf tunnelman-linux-amd64.tar.gz
+        sudo mv tunnelman-linux-amd64 /usr/local/bin/tunnelman
+        chmod +x /usr/local/bin/tunnelman
+        ```
+        
+        #### Debian/Ubuntu (Package)
+        ```bash
+        # Download and install the .deb package
+        wget https://github.com/your-username/tunnelman/releases/download/${{ steps.version.outputs.VERSION }}/tunnelman_*_amd64.deb
+        sudo dpkg -i tunnelman_*_amd64.deb
+        
+        # Install dependencies if needed
+        sudo apt-get install -f
+        ```
+        
+        ### Prerequisites
+        - Install `cloudflared`: https://github.com/cloudflare/cloudflared
+        - Configure Cloudflare API credentials
+        
+        ### What's Changed
+        - View the full changelog at: https://github.com/your-username/tunnelman/compare/...
+        EOF
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: Release ${{ steps.version.outputs.VERSION }}
+        body_path: release_notes.md
+        files: release/*
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify-success:
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+    - name: Release Summary
+      run: |
+        echo "🎉 Release ${{ needs.create-release.outputs.version || github.ref_name }} completed successfully!"
+        echo ""
+        echo "📦 Artifacts created:"
+        echo "- Linux AMD64 & ARM64 binaries"
+        echo "- macOS Intel & Apple Silicon binaries" 
+        echo "- Windows binary"
+        echo "- Debian package"
+        echo ""
+        echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"

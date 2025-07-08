@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"gopkg.in/yaml.v2"
 )
 
 type TunnelManager struct {
@@ -333,7 +333,7 @@ func (tm *TunnelManager) SaveTunnelConfig(tunnelName string, config *TunnelConfi
 	}
 
 	configPath := filepath.Join(tm.configDir, fmt.Sprintf("%s.yml", tunnelName))
-	
+
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
@@ -348,7 +348,7 @@ func (tm *TunnelManager) SaveTunnelConfig(tunnelName string, config *TunnelConfi
 
 func (tm *TunnelManager) LoadTunnelConfig(tunnelName string) (*TunnelConfigFile, error) {
 	configPath := filepath.Join(tm.configDir, fmt.Sprintf("%s.yml", tunnelName))
-	
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("config file not found: %s", configPath)
 	}
@@ -368,7 +368,7 @@ func (tm *TunnelManager) LoadTunnelConfig(tunnelName string) (*TunnelConfigFile,
 
 func (tm *TunnelManager) DeleteTunnelConfig(tunnelName string) error {
 	configPath := filepath.Join(tm.configDir, fmt.Sprintf("%s.yml", tunnelName))
-	
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil
 	}
@@ -425,7 +425,7 @@ func (tm *TunnelManager) ValidateTunnelConfig(config *TunnelConfigFile) error {
 
 func (tm *TunnelManager) CreateDefaultConfig(tunnelID, tunnelName string) *TunnelConfigFile {
 	credentialsFile := filepath.Join(tm.configDir, fmt.Sprintf("%s.json", tunnelID))
-	
+
 	return &TunnelConfigFile{
 		TunnelID:        tunnelID,
 		CredentialsFile: credentialsFile,
@@ -440,7 +440,7 @@ func (tm *TunnelManager) CreateDefaultConfig(tunnelID, tunnelName string) *Tunne
 
 func (tm *TunnelManager) CreateWebServiceConfig(tunnelID, hostname, serviceURL string) *TunnelConfigFile {
 	credentialsFile := filepath.Join(tm.configDir, fmt.Sprintf("%s.json", tunnelID))
-	
+
 	return &TunnelConfigFile{
 		TunnelID:        tunnelID,
 		CredentialsFile: credentialsFile,

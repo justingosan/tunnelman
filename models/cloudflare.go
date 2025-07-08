@@ -14,11 +14,9 @@ import (
 )
 
 type CloudflareClient struct {
-	api        *cloudflare.API
-	accountID  string
-	zoneID     string
-	zoneDomain string
-	config     *Config
+	api       *cloudflare.API
+	accountID string
+	config    *Config
 }
 
 type TunnelResponse struct {
@@ -51,16 +49,16 @@ type TunnelConfigIngress struct {
 }
 
 type TunnelConfiguration struct {
-	TunnelID    string `json:"tunnel_id"`
-	Version     int    `json:"version"`
-	Config      TunnelConfigData `json:"config"`
-	Source      string `json:"source"`
-	CreatedAt   string `json:"created_at"`
+	TunnelID  string           `json:"tunnel_id"`
+	Version   int              `json:"version"`
+	Config    TunnelConfigData `json:"config"`
+	Source    string           `json:"source"`
+	CreatedAt string           `json:"created_at"`
 }
 
 type TunnelConfigData struct {
 	Ingress     []TunnelConfigIngress `json:"ingress"`
-	WarpRouting WarpRouting          `json:"warp-routing"`
+	WarpRouting WarpRouting           `json:"warp-routing"`
 }
 
 type WarpRouting struct {
@@ -104,24 +102,16 @@ func NewCloudflareClient(config *Config) (*CloudflareClient, error) {
 
 	client := &CloudflareClient{
 		api:    api,
-		zoneID: config.CloudflareZoneID,
 		config: config,
 	}
-	
+
 	ctx := context.Background()
-	
+
 	// Get account ID
 	if accounts, _, err := api.Accounts(ctx, cloudflare.AccountsListParams{}); err == nil && len(accounts) > 0 {
 		client.accountID = accounts[0].ID
 	}
-	
-	// Try to get zone domain name if zone ID is available
-	if config.CloudflareZoneID != "" {
-		if zoneDetails, err := api.ZoneDetails(ctx, config.CloudflareZoneID); err == nil {
-			client.zoneDomain = zoneDetails.Name
-		}
-	}
-	
+
 	return client, nil
 }
 
@@ -134,7 +124,7 @@ func (c *CloudflareClient) ValidateCredentials(ctx context.Context) error {
 }
 
 func (c *CloudflareClient) GetZoneDomain() string {
-	return c.zoneDomain
+	return ""
 }
 
 func (c *CloudflareClient) GetZoneID(ctx context.Context, domain string) (string, error) {
@@ -163,6 +153,25 @@ func (c *CloudflareClient) ListAllZones(ctx context.Context) error {
 		fmt.Printf("  %d. Zone: %s (ID: %s)\n", i+1, zone.Name, zone.ID)
 	}
 	return nil
+}
+
+func (c *CloudflareClient) GetAvailableDomains(ctx context.Context) ([]string, error) {
+	zones, err := c.api.ListZones(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list zones: %w", err)
+	}
+
+	var domains []string
+	for _, zone := range zones {
+		domains = append(domains, zone.Name)
+	}
+
+	return domains, nil
+}
+
+// GetAccountID returns the account ID for the authenticated user
+func (c *CloudflareClient) GetAccountID() string {
+	return c.accountID
 }
 
 // Tunnel Management via CLI
@@ -259,7 +268,7 @@ func (c *CloudflareClient) CreateTunnelDNSRecord(ctx context.Context, tunnelName
 		args = append(args, "--overwrite-dns")
 	}
 	args = append(args, tunnelName, hostname)
-	
+
 	_, err := c.execCommand("cloudflared", args...)
 	if err != nil {
 		return fmt.Errorf("failed to create tunnel DNS record: %w", err)
@@ -286,42 +295,42 @@ func (c *CloudflareClient) GetTunnelConfiguration(ctx context.Context, tunnelID 
 	if c.accountID == "" {
 		return nil, fmt.Errorf("account ID not available")
 	}
-	
+
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/cfd_tunnel/%s/configurations", c.accountID, tunnelID)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+c.config.CloudflareAPIKey)
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tunnel configuration: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API request failed with status %d", resp.StatusCode)
 	}
-	
+
 	var response struct {
-		Success bool                 `json:"success"`
-		Result  TunnelConfiguration  `json:"result"`
+		Success bool                     `json:"success"`
+		Result  TunnelConfiguration      `json:"result"`
 		Errors  []map[string]interface{} `json:"errors"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	if !response.Success {
 		return nil, fmt.Errorf("API request failed: %v", response.Errors)
 	}
-	
+
 	return &response.Result, nil
 }
 
@@ -329,48 +338,48 @@ func (c *CloudflareClient) UpdateTunnelConfiguration(ctx context.Context, tunnel
 	if c.accountID == "" {
 		return fmt.Errorf("account ID not available")
 	}
-	
+
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/cfd_tunnel/%s/configurations", c.accountID, tunnelID)
-	
+
 	body, err := json.Marshal(map[string]interface{}{
 		"config": config,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	req, err := http.NewRequestWithContext(ctx, "PUT", url, strings.NewReader(string(body)))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+c.config.CloudflareAPIKey)
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to update tunnel configuration: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("API request failed with status %d", resp.StatusCode)
 	}
-	
+
 	var response struct {
 		Success bool                     `json:"success"`
 		Errors  []map[string]interface{} `json:"errors"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
-	
+
 	if !response.Success {
 		return fmt.Errorf("API request failed: %v", response.Errors)
 	}
-	
+
 	return nil
 }
 
@@ -379,14 +388,14 @@ func (c *CloudflareClient) GetPublicHostnames(ctx context.Context, tunnelID stri
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var hostnames []PublicHostname
 	for _, ingress := range config.Config.Ingress {
 		// Skip catch-all rules without hostname
 		if ingress.Hostname == "" {
 			continue
 		}
-		
+
 		hostnames = append(hostnames, PublicHostname{
 			ID:       ingress.ID,
 			Hostname: ingress.Hostname,
@@ -394,7 +403,7 @@ func (c *CloudflareClient) GetPublicHostnames(ctx context.Context, tunnelID stri
 			Service:  ingress.Service,
 		})
 	}
-	
+
 	return hostnames, nil
 }
 
@@ -403,7 +412,7 @@ func (c *CloudflareClient) AddPublicHostname(ctx context.Context, tunnelID, host
 	if err != nil {
 		return err
 	}
-	
+
 	// Set defaults
 	if path == "" {
 		path = "*"
@@ -411,14 +420,14 @@ func (c *CloudflareClient) AddPublicHostname(ctx context.Context, tunnelID, host
 	if service == "" {
 		service = "http://localhost:8080"
 	}
-	
+
 	// Check if hostname already exists
 	for _, ingress := range config.Config.Ingress {
 		if ingress.Hostname == hostname && ingress.Path == path {
 			return fmt.Errorf("hostname %s with path %s already exists", hostname, path)
 		}
 	}
-	
+
 	// Find the catch-all rule (should be last)
 	var catchAllIndex = -1
 	for i, ingress := range config.Config.Ingress {
@@ -427,7 +436,7 @@ func (c *CloudflareClient) AddPublicHostname(ctx context.Context, tunnelID, host
 			break
 		}
 	}
-	
+
 	// Generate a unique ID for the new ingress rule
 	maxID := 0
 	for _, ingress := range config.Config.Ingress {
@@ -437,39 +446,39 @@ func (c *CloudflareClient) AddPublicHostname(ctx context.Context, tunnelID, host
 			}
 		}
 	}
-	
+
 	newIngress := TunnelConfigIngress{
 		ID:            strconv.Itoa(maxID + 1),
 		Hostname:      hostname,
 		Service:       service,
 		OriginRequest: map[string]interface{}{},
 	}
-	
+
 	// Only add path if it's not "*"
 	if path != "*" {
 		newIngress.Path = path
 	}
-	
+
 	// Insert before catch-all rule
 	if catchAllIndex >= 0 {
-		config.Config.Ingress = append(config.Config.Ingress[:catchAllIndex], 
+		config.Config.Ingress = append(config.Config.Ingress[:catchAllIndex],
 			append([]TunnelConfigIngress{newIngress}, config.Config.Ingress[catchAllIndex:]...)...)
 	} else {
 		// No catch-all rule, append to end
 		config.Config.Ingress = append(config.Config.Ingress, newIngress)
 	}
-	
+
 	// Update the tunnel configuration
 	if err := c.UpdateTunnelConfiguration(ctx, tunnelID, &config.Config); err != nil {
 		return err
 	}
-	
+
 	// Also create DNS record for the hostname
 	if err := c.CreateTunnelDNSRecord(ctx, tunnelID, hostname, false); err != nil {
 		// Log warning but don't fail the operation
 		fmt.Printf("Warning: Failed to create DNS record for %s: %v\n", hostname, err)
 	}
-	
+
 	return nil
 }
 
@@ -503,7 +512,7 @@ func (c *CloudflareClient) UpdatePublicHostname(ctx context.Context, tunnelID, o
 	// Update the fields
 	ingressToUpdate.Hostname = newHostname
 	ingressToUpdate.Service = service
-	
+
 	// Only set path if it's not "*"
 	if path != "*" {
 		ingressToUpdate.Path = path
@@ -520,12 +529,12 @@ func (c *CloudflareClient) RemovePublicHostname(ctx context.Context, tunnelID, h
 	if err != nil {
 		return err
 	}
-	
+
 	// Set default path if empty
 	if path == "" {
 		path = "*"
 	}
-	
+
 	// Find and remove the ingress rule
 	found := false
 	for i, ingress := range config.Config.Ingress {
@@ -540,169 +549,12 @@ func (c *CloudflareClient) RemovePublicHostname(ctx context.Context, tunnelID, h
 			break
 		}
 	}
-	
+
 	if !found {
 		return fmt.Errorf("hostname %s with path %s not found", hostname, path)
 	}
-	
+
 	return c.UpdateTunnelConfiguration(ctx, tunnelID, &config.Config)
-}
-
-// DNS Record Management via API
-
-func (c *CloudflareClient) ListDNSRecords(ctx context.Context) ([]cloudflare.DNSRecord, error) {
-	if c.zoneID == "" {
-		return nil, fmt.Errorf("zone ID is required")
-	}
-
-	rc := &cloudflare.ResourceContainer{
-		Identifier: c.zoneID,
-	}
-
-	records, _, err := c.api.ListDNSRecords(ctx, rc, cloudflare.ListDNSRecordsParams{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list DNS records: %w", err)
-	}
-
-	return records, nil
-}
-
-func (c *CloudflareClient) CreateDNSRecord(ctx context.Context, record DNSRecordRequest) (*cloudflare.DNSRecord, error) {
-	if c.zoneID == "" {
-		return nil, fmt.Errorf("zone ID is required")
-	}
-
-	rc := &cloudflare.ResourceContainer{
-		Identifier: c.zoneID,
-	}
-
-	params := cloudflare.CreateDNSRecordParams{
-		Type:    record.Type,
-		Name:    record.Name,
-		Content: record.Content,
-		Comment: record.Comment,
-	}
-
-	if record.TTL > 0 {
-		params.TTL = record.TTL
-	}
-
-	if record.Priority > 0 {
-		priority := uint16(record.Priority)
-		params.Priority = &priority
-	}
-
-	if record.Proxied != nil {
-		params.Proxied = record.Proxied
-	}
-
-	dnsRecord, err := c.api.CreateDNSRecord(ctx, rc, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create DNS record: %w", err)
-	}
-
-	return &dnsRecord, nil
-}
-
-func (c *CloudflareClient) UpdateDNSRecord(ctx context.Context, recordID string, record DNSRecordRequest) (*cloudflare.DNSRecord, error) {
-	if c.zoneID == "" {
-		return nil, fmt.Errorf("zone ID is required")
-	}
-
-	rc := &cloudflare.ResourceContainer{
-		Identifier: c.zoneID,
-	}
-
-	params := cloudflare.UpdateDNSRecordParams{
-		ID:      recordID,
-		Type:    record.Type,
-		Name:    record.Name,
-		Content: record.Content,
-		Comment: &record.Comment,
-	}
-
-	if record.TTL > 0 {
-		params.TTL = record.TTL
-	}
-
-	if record.Priority > 0 {
-		priority := uint16(record.Priority)
-		params.Priority = &priority
-	}
-
-	if record.Proxied != nil {
-		params.Proxied = record.Proxied
-	}
-
-	dnsRecord, err := c.api.UpdateDNSRecord(ctx, rc, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update DNS record: %w", err)
-	}
-
-	return &dnsRecord, nil
-}
-
-func (c *CloudflareClient) DeleteDNSRecord(ctx context.Context, recordID string) error {
-	if c.zoneID == "" {
-		return fmt.Errorf("zone ID is required")
-	}
-
-	rc := &cloudflare.ResourceContainer{
-		Identifier: c.zoneID,
-	}
-
-	err := c.api.DeleteDNSRecord(ctx, rc, recordID)
-	if err != nil {
-		return fmt.Errorf("failed to delete DNS record: %w", err)
-	}
-
-	return nil
-}
-
-func (c *CloudflareClient) GetDNSRecord(ctx context.Context, recordID string) (*cloudflare.DNSRecord, error) {
-	if c.zoneID == "" {
-		return nil, fmt.Errorf("zone ID is required")
-	}
-
-	rc := &cloudflare.ResourceContainer{
-		Identifier: c.zoneID,
-	}
-
-	record, err := c.api.GetDNSRecord(ctx, rc, recordID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get DNS record: %w", err)
-	}
-
-	return &record, nil
-}
-
-func (c *CloudflareClient) FindDNSRecordByName(ctx context.Context, name string, recordType string) (*cloudflare.DNSRecord, error) {
-	if c.zoneID == "" {
-		return nil, fmt.Errorf("zone ID is required")
-	}
-
-	rc := &cloudflare.ResourceContainer{
-		Identifier: c.zoneID,
-	}
-
-	params := cloudflare.ListDNSRecordsParams{
-		Name: name,
-	}
-
-	if recordType != "" {
-		params.Type = recordType
-	}
-
-	records, _, err := c.api.ListDNSRecords(ctx, rc, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find DNS record: %w", err)
-	}
-
-	if len(records) == 0 {
-		return nil, fmt.Errorf("DNS record not found: %s", name)
-	}
-
-	return &records[0], nil
 }
 
 // Status and Monitoring
@@ -735,13 +587,6 @@ func (c *CloudflareClient) GetTunnelStatus(ctx context.Context, nameOrID string)
 func (c *CloudflareClient) HealthCheck(ctx context.Context) error {
 	if err := c.ValidateCredentials(ctx); err != nil {
 		return fmt.Errorf("credentials validation failed: %w", err)
-	}
-
-	if c.zoneID != "" {
-		_, err := c.api.ZoneDetails(ctx, c.zoneID)
-		if err != nil {
-			return fmt.Errorf("zone validation failed: %w", err)
-		}
 	}
 
 	return nil

@@ -42,14 +42,12 @@ jobs:
         cat > $HOME/.tunnelman/config.json << EOF
         {
           "cloudflare_api_key": "${{ secrets.CLOUDFLARE_API_TOKEN }}",
-          "cloudflare_zone_id": "${{ secrets.CLOUDFLARE_ZONE_ID }}",
           "auto_refresh_seconds": 30,
           "log_level": "info"
         }
         EOF
       env:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
 
     - name: Install dependencies
       run: make deps
