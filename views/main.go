@@ -58,6 +58,10 @@ type tunnelDomainCountsLoadedMsg map[string]int
 type tunnelStatusesLoadedMsg map[string]models.TunnelStatus
 type errorMsg string
 type statusMsg string
+type hostnameDeletedMsg struct {
+	message  string
+	tunnelID string
+}
 
 func NewModel(state *models.AppState, client *models.CloudflareClient, tunnelManager *models.TunnelManager) Model {
 	return Model{
@@ -291,10 +295,16 @@ func (m Model) deleteTunnelHostnameWithDNS() tea.Cmd {
 		if err != nil {
 			// Don't fail the whole operation if DNS deletion fails
 			// Many users might not have DNS records managed by cloudflared
-			return statusMsg(fmt.Sprintf("Deleted hostname: %s (DNS record deletion failed - might not exist or be managed externally)", hostname))
+			return hostnameDeletedMsg{
+				message:  fmt.Sprintf("Deleted hostname: %s (DNS record deletion failed - might not exist or be managed externally)", hostname),
+				tunnelID: m.selectedTunnelID,
+			}
 		}
 
-		return statusMsg(fmt.Sprintf("Successfully deleted hostname: %s and its DNS record", hostname))
+		return hostnameDeletedMsg{
+			message:  fmt.Sprintf("Successfully deleted hostname: %s and its DNS record", hostname),
+			tunnelID: m.selectedTunnelID,
+		}
 	})
 }
 
@@ -363,7 +373,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = true
 			m.statusMessage = "Refreshing..."
 			m.errorMessage = "" // Clear any previous errors
-			cmds = append(cmds, m.loadTunnels())
+			if m.showTunnelHostnames && m.selectedTunnelID != "" {
+				// Refresh hostname list if we're viewing hostnames
+				cmds = append(cmds, m.loadTunnelHostnames(m.selectedTunnelID))
+			} else {
+				// Refresh tunnel list if we're in main view
+				cmds = append(cmds, m.loadTunnels())
+			}
 
 		case "c":
 			m.errorMessage = ""
@@ -578,6 +594,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Also update the domain count for this tunnel
 				cmds = append(cmds, m.updateSingleTunnelDomainCount(m.selectedTunnelID))
 			}
+		}
+
+	case hostnameDeletedMsg:
+		m.statusMessage = msg.message
+		m.loading = false
+		// Automatically reload hostnames after deletion
+		if m.showTunnelHostnames && msg.tunnelID != "" {
+			cmds = append(cmds, m.loadTunnelHostnames(msg.tunnelID))
+			// Also update the domain count for this tunnel
+			cmds = append(cmds, m.updateSingleTunnelDomainCount(msg.tunnelID))
 		}
 	}
 
