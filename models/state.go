@@ -25,11 +25,12 @@ type UIState struct {
 }
 
 type AppState struct {
-	Tunnels    []Tunnel    `json:"tunnels"`
-	DNSRecords []DNSRecord `json:"dns_records"`
-	UI         UIState     `json:"ui"`
-	LastSync   time.Time   `json:"last_sync"`
-	ConfigPath string      `json:"config_path"`
+	Tunnels        []Tunnel    `json:"tunnels"`
+	DNSRecords     []DNSRecord `json:"dns_records"`
+	UI             UIState     `json:"ui"`
+	LastSync       time.Time   `json:"last_sync"`
+	ConfigPath     string      `json:"config_path"`
+	SelectedDomain string      `json:"selected_domain"`
 }
 
 func NewAppState() *AppState {
@@ -147,4 +148,12 @@ func (s *AppState) SetFilter(filter string) {
 func (s *AppState) UpdateWindowSize(width, height int) {
 	s.UI.WindowWidth = width
 	s.UI.WindowHeight = height
+}
+
+func (s *AppState) SetSelectedDomain(domain string) {
+	s.SelectedDomain = domain
+}
+
+func (s *AppState) GetSelectedDomain() string {
+	return s.SelectedDomain
 }

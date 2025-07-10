@@ -2,6 +2,8 @@
 
 A Terminal User Interface (TUI) for managing remotely-managed Cloudflare Tunnels locally without needing the web browser.
 
+![Demo](demo.svg)
+
 Manage your Cloudflare-hosted tunnels (the ones created and configured via Cloudflare dashboard) directly from your terminal with real-time status monitoring and hostname management.
 
 Motivation: I like using Cloudflare Tunnels instead of other tools like ngok, localtunnel for my sharing my local services / personal projects with workmates / friends but always found the web UI to be clunky and not very intuitive.

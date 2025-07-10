@@ -14,9 +14,10 @@ import (
 )
 
 type CloudflareClient struct {
-	api       *cloudflare.API
-	accountID string
-	config    *Config
+	api            *cloudflare.API
+	accountID      string
+	config         *Config
+	selectedDomain string
 }
 
 type TunnelResponse struct {
@@ -124,7 +125,11 @@ func (c *CloudflareClient) ValidateCredentials(ctx context.Context) error {
 }
 
 func (c *CloudflareClient) GetZoneDomain() string {
-	return ""
+	return c.selectedDomain
+}
+
+func (c *CloudflareClient) SetSelectedDomain(domain string) {
+	c.selectedDomain = domain
 }
 
 func (c *CloudflareClient) GetZoneID(ctx context.Context, domain string) (string, error) {
@@ -263,25 +268,122 @@ func (c *CloudflareClient) RouteDNS(ctx context.Context, tunnelName, hostname st
 }
 
 func (c *CloudflareClient) CreateTunnelDNSRecord(ctx context.Context, tunnelName, hostname string, overwrite bool) error {
-	args := []string{"tunnel", "route", "dns"}
-	if overwrite {
-		args = append(args, "--overwrite-dns")
-	}
-	args = append(args, tunnelName, hostname)
-
-	_, err := c.execCommand("cloudflared", args...)
-	if err != nil {
-		return fmt.Errorf("failed to create tunnel DNS record: %w", err)
-	}
-	return nil
+	// Use Cloudflare API directly instead of cloudflared CLI to have full control over zone selection
+	return c.createDNSRecordAPI(ctx, tunnelName, hostname, overwrite)
 }
 
 func (c *CloudflareClient) DeleteTunnelDNSRecord(ctx context.Context, hostname string) error {
-	_, err := c.execCommand("cloudflared", "tunnel", "route", "dns", "delete", hostname)
+	// Use Cloudflare API directly instead of cloudflared CLI
+	return c.deleteDNSRecordAPI(ctx, hostname)
+}
+
+func (c *CloudflareClient) createDNSRecordAPI(ctx context.Context, tunnelName, hostname string, overwrite bool) error {
+	// Get the tunnel ID for the tunnel name
+	tunnelID, err := c.getTunnelIDFromName(ctx, tunnelName)
 	if err != nil {
-		return fmt.Errorf("failed to delete tunnel DNS record: %w", err)
+		return fmt.Errorf("failed to get tunnel ID for %s: %w", tunnelName, err)
 	}
+
+	// Use the selected domain to determine the zone
+	if c.selectedDomain == "" {
+		return fmt.Errorf("no domain selected - please select a domain first")
+	}
+
+	// Get zone ID for the selected domain
+	zoneID, err := c.GetZoneID(ctx, c.selectedDomain)
+	if err != nil {
+		return fmt.Errorf("failed to get zone ID for domain %s: %w", c.selectedDomain, err)
+	}
+
+	// Create the CNAME record pointing to the tunnel
+	tunnelTarget := fmt.Sprintf("%s.cfargotunnel.com", tunnelID)
+	
+	// Check if record already exists
+	existingRecords, _, err := c.api.ListDNSRecords(ctx, cloudflare.ZoneIdentifier(zoneID), cloudflare.ListDNSRecordsParams{
+		Name: hostname,
+		Type: "CNAME",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to check existing DNS records: %w", err)
+	}
+
+	if len(existingRecords) > 0 {
+		if !overwrite {
+			return fmt.Errorf("DNS record for %s already exists. Use overwrite option to replace it", hostname)
+		}
+		// Delete existing record
+		for _, record := range existingRecords {
+			err := c.api.DeleteDNSRecord(ctx, cloudflare.ZoneIdentifier(zoneID), record.ID)
+			if err != nil {
+				return fmt.Errorf("failed to delete existing DNS record: %w", err)
+			}
+		}
+	}
+
+	// Create new CNAME record
+	record := cloudflare.CreateDNSRecordParams{
+		Type:    "CNAME",
+		Name:    hostname,
+		Content: tunnelTarget,
+		TTL:     1, // Auto TTL
+	}
+
+	_, err = c.api.CreateDNSRecord(ctx, cloudflare.ZoneIdentifier(zoneID), record)
+	if err != nil {
+		return fmt.Errorf("failed to create DNS record: %w", err)
+	}
+
 	return nil
+}
+
+func (c *CloudflareClient) deleteDNSRecordAPI(ctx context.Context, hostname string) error {
+	// Use the selected domain to determine the zone
+	if c.selectedDomain == "" {
+		return fmt.Errorf("no domain selected - please select a domain first")
+	}
+
+	// Get zone ID for the selected domain
+	zoneID, err := c.GetZoneID(ctx, c.selectedDomain)
+	if err != nil {
+		return fmt.Errorf("failed to get zone ID for domain %s: %w", c.selectedDomain, err)
+	}
+
+	// Find DNS records for the hostname
+	records, _, err := c.api.ListDNSRecords(ctx, cloudflare.ZoneIdentifier(zoneID), cloudflare.ListDNSRecordsParams{
+		Name: hostname,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list DNS records: %w", err)
+	}
+
+	if len(records) == 0 {
+		return fmt.Errorf("no DNS record found for %s", hostname)
+	}
+
+	// Delete all matching records
+	for _, record := range records {
+		err := c.api.DeleteDNSRecord(ctx, cloudflare.ZoneIdentifier(zoneID), record.ID)
+		if err != nil {
+			return fmt.Errorf("failed to delete DNS record %s: %w", record.ID, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *CloudflareClient) getTunnelIDFromName(ctx context.Context, tunnelName string) (string, error) {
+	tunnels, err := c.ListTunnels(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to list tunnels: %w", err)
+	}
+
+	for _, tunnel := range tunnels {
+		if tunnel.Name == tunnelName {
+			return tunnel.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("tunnel with name %s not found", tunnelName)
 }
 
 func (c *CloudflareClient) ValidateConfig(configPath string) error {

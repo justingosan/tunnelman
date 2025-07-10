@@ -128,11 +128,27 @@ clean:
 	rm -f coverage.out coverage.html
 	@echo "✅ Cleanup completed"
 
-# Install the binary to GOPATH/bin
+# Install the binary to user's local bin (~/.local/bin) - recommended
 install: build
-	@echo "📦 Installing $(BINARY_NAME)..."
+	@echo "📦 Installing $(BINARY_NAME) to ~/.local/bin..."
+	@mkdir -p ~/.local/bin
+	@cp $(BINARY_NAME) ~/.local/bin/
+	@chmod +x ~/.local/bin/$(BINARY_NAME)
+	@echo "✅ $(BINARY_NAME) installed to ~/.local/bin"
+	@echo "ℹ️  Make sure ~/.local/bin is in your PATH"
+
+# Install the binary to GOPATH/bin
+install-go: build
+	@echo "📦 Installing $(BINARY_NAME) to GOPATH/bin..."
 	go install $(LDFLAGS) $(MAIN_FILE)
-	@echo "✅ $(BINARY_NAME) installed to GOPATH/bin"
+	@echo "✅ $(BINARY_NAME) installed to $(shell go env GOPATH)/bin"
+
+# Install the binary to /usr/local/bin (requires sudo)
+install-system: build
+	@echo "📦 Installing $(BINARY_NAME) to /usr/local/bin (requires sudo)..."
+	sudo cp $(BINARY_NAME) /usr/local/bin/
+	sudo chmod +x /usr/local/bin/$(BINARY_NAME)
+	@echo "✅ $(BINARY_NAME) installed to /usr/local/bin"
 
 # Show help
 help:
@@ -153,7 +169,9 @@ help:
 	@echo "  fmt            - Format code"
 	@echo "  vet            - Run go vet"
 	@echo "  clean          - Clean build artifacts"
-	@echo "  install        - Install binary to GOPATH/bin"
+	@echo "  install        - Install binary to ~/.local/bin (recommended)"
+	@echo "  install-go     - Install binary to GOPATH/bin"
+	@echo "  install-system - Install binary to /usr/local/bin (requires sudo)"
 	@echo "  help           - Show this help"
 
 # Test targets for CI/CD

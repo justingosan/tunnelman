@@ -545,15 +545,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case domainsLoadedMsg:
 		m.availableDomains = []string(msg)
 		m.selectedDomainIndex = 0
-		// Find the current zone domain if available
-		currentDomain := m.client.GetZoneDomain()
-		if currentDomain != "" {
+		
+		// Check if there's a saved domain in state first
+		savedDomain := m.state.GetSelectedDomain()
+		if savedDomain != "" {
 			for i, domain := range m.availableDomains {
-				if domain == currentDomain {
+				if domain == savedDomain {
 					m.selectedDomainIndex = i
+					m.client.SetSelectedDomain(savedDomain)
 					break
 				}
 			}
+		} else {
+			// Find the current zone domain if available
+			currentDomain := m.client.GetZoneDomain()
+			if currentDomain != "" {
+				for i, domain := range m.availableDomains {
+					if domain == currentDomain {
+						m.selectedDomainIndex = i
+						break
+					}
+				}
+			}
+		}
+		
+		// Set the first domain as default if none selected and domains available
+		if len(m.availableDomains) > 0 {
+			selectedDomain := m.availableDomains[m.selectedDomainIndex]
+			m.state.SetSelectedDomain(selectedDomain)
+			m.client.SetSelectedDomain(selectedDomain)
 		}
 
 	case tunnelDomainCountsLoadedMsg:
@@ -768,11 +788,25 @@ func (m Model) handleFormInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case "up":
 				if m.selectedDomainIndex > 0 {
 					m.selectedDomainIndex--
+					// Update selected domain in state and client
+					if m.selectedDomainIndex < len(m.availableDomains) {
+						selectedDomain := m.availableDomains[m.selectedDomainIndex]
+						m.state.SetSelectedDomain(selectedDomain)
+						m.client.SetSelectedDomain(selectedDomain)
+						m.state.Save() // Persist the selection
+					}
 				}
 				return m, nil
 			case "down":
 				if m.selectedDomainIndex < len(m.availableDomains)-1 {
 					m.selectedDomainIndex++
+					// Update selected domain in state and client
+					if m.selectedDomainIndex < len(m.availableDomains) {
+						selectedDomain := m.availableDomains[m.selectedDomainIndex]
+						m.state.SetSelectedDomain(selectedDomain)
+						m.client.SetSelectedDomain(selectedDomain)
+						m.state.Save() // Persist the selection
+					}
 				}
 				return m, nil
 			}
