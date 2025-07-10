@@ -35,10 +35,10 @@ deps:
 	go mod download
 	@echo "✅ Dependencies installed"
 
-# Run unit tests
+# Run unit tests (excluding E2E tests)
 test:
 	@echo "🧪 Running unit tests..."
-	go test -v -race -coverprofile=coverage.out ./...
+	go test -v -race -coverprofile=coverage.out -skip TestE2E ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "✅ Unit tests completed"
 
