@@ -4,12 +4,16 @@ A Terminal User Interface (TUI) for managing remotely-managed Cloudflare Tunnels
 
 Manage your Cloudflare-hosted tunnels (the ones created and configured via Cloudflare dashboard) directly from your terminal with real-time status monitoring and hostname management.
 
+Motivation: I like using Cloudflare Tunnels instead of other tools like ngok, localtunnel for my sharing my local services / personal projects with workmates / friends but always found the web UI to be clunky and not very intuitive.
+
+PS: I've only tested this on macOS.
+
 ## Features
 
-- **Local Management of Remote Tunnels** - control Cloudflare-hosted tunnels from your terminal
-- **No Web Browser Required** - full tunnel management without opening the dashboard
 - **Real-time Status** - view tunnel health (HEALTHY/DOWN) instantly
-- **Hostname Management** - add, edit, delete public hostnames
+- **Local Management of Remote Tunnels** - control Cloudflare-hosted tunnels from your terminal
+- **No Web Browser Required** - tunnel management without opening the web dashboard
+- **Hostname Management** - add, edit, delete public hostnames. also removes the dns record on deletion
 - **Browser Integration** - press 'o' to open specific tunnel config when needed
 - **Cross-platform** binaries and Debian packages
 
@@ -53,12 +57,6 @@ sudo mv tunnelman-darwin-arm64 /usr/local/bin/tunnelman
 chmod +x /usr/local/bin/tunnelman
 ```
 
-#### Windows
-```powershell
-# Download and extract the ZIP file from releases page
-# Add tunnelman.exe to your PATH
-```
-
 ### Prerequisites
 
 - `cloudflared` CLI tool installed and configured
@@ -74,9 +72,6 @@ brew install cloudflared
 wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 sudo dpkg -i cloudflared-linux-amd64.deb
 
-# Windows
-winget install --id Cloudflare.cloudflared
-```
 
 ### Build from Source
 
@@ -137,14 +132,6 @@ export CLOUDFLARE_EMAIL="your-email@example.com"  # Optional
 ./tunnelman
 ```
 
-### Navigation
-
-- **Tab/Shift+Tab**: Navigate between form fields
-- **Enter**: Select/confirm actions
-- **Escape**: Go back to parent view or cancel forms
-- **Arrow Keys**: Navigate lists and dropdowns
-- **q**: Quit the application
-
 ### Main Interface
 
 The main interface displays:
@@ -163,27 +150,7 @@ The main interface displays:
    - Update service URL
    - Change path routing
 
-3. **Remove Hostname**: Delete unwanted hostname configurations
-
-## Development
-
-### Project Structure
-
-```
-tunnelman/
-├── main.go              # Application entry point
-├── models/
-│   ├── config.go        # Configuration management
-│   ├── cloudflare.go    # Cloudflare API client
-│   └── tunnel.go        # Tunnel management logic
-├── views/
-│   └── main.go          # TUI implementation
-├── e2e_test.go          # End-to-end tests
-├── scripts/
-│   └── run_e2e_tests.sh # Test runner
-└── .github/
-    └── workflows/       # CI/CD pipelines
-```
+3. **Remove Hostname**: Delete unwanted hostname configurations including the DNS record
 
 ### Key Components
 

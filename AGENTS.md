@@ -3,16 +3,16 @@
 
 # Product Requirements Document
 
-### CFTUI - Cloudflare Tunnel Management TUI
+### Tunnelman - Cloudflare Tunnel Management TUI
 
 ## 1. Product Overview
 
 ### 1.1 Purpose
-CFTUI is a Terminal User Interface (TUI) application that provides developers with a fast, efficient way to manage Cloudflare tunnels and associated DNS records from the command line. It eliminates the need to switch between multiple tools and web interfaces when working with local development environments.
+Tunnelman is a Terminal User Interface (TUI) application that provides developers with a fast, efficient way to manage Cloudflare tunnels and associated DNS records from the command line. It eliminates the need to switch between multiple tools and web interfaces when working with local development environments.
 
 ### 1.2 Target Users
 - Full-stack developers running local development servers
-- DevOps engineers managing staging environments
+- DevOps engineers managing clouflare tunnels
 - Teams using Cloudflare tunnels for secure local development
 - Developers who prefer terminal-based workflows
 
@@ -20,8 +20,7 @@ CFTUI is a Terminal User Interface (TUI) application that provides developers wi
 - Single interface for tunnel and DNS management
 - Faster workflow compared to web dashboard + CLI commands
 - Visual status indicators for running services
-- Persistent configuration management
-- Cross-platform compatibility
+- Cross-platform compatibility (macOS, Linux, Windows). * only tested this on macOS.
 
 ---
 
@@ -32,10 +31,8 @@ CFTUI is a Terminal User Interface (TUI) application that provides developers wi
 
 #### Requirements:
 - List all configured tunnels with status indicators
-- Start/stop tunnels with single keypress
-- Create new tunnel configurations
-- Delete existing tunnel configurations
-- Real-time status updates (running/stopped/error)
+- CRUD operations for hostnames
+- Real-time status updates (running/stopped)
 - Display public URLs for active tunnels
 
 #### Acceptance Criteria:
