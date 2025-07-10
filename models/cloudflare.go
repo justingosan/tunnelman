@@ -481,8 +481,15 @@ func (c *CloudflareClient) AddPublicHostname(ctx context.Context, tunnelID, host
 		return err
 	}
 
-	// Also create DNS record for the hostname
-	if err := c.CreateTunnelDNSRecord(ctx, tunnelID, hostname, false); err != nil {
+	// Get tunnel info to get the tunnel name for DNS creation
+	tunnel, err := c.GetTunnelInfo(ctx, tunnelID)
+	if err != nil {
+		fmt.Printf("Warning: Failed to get tunnel info for DNS creation: %v\n", err)
+		return nil // Don't fail the whole operation
+	}
+
+	// Also create DNS record for the hostname using tunnel name
+	if err := c.CreateTunnelDNSRecord(ctx, tunnel.Name, hostname, false); err != nil {
 		// Log warning but don't fail the operation
 		fmt.Printf("Warning: Failed to create DNS record for %s: %v\n", hostname, err)
 	}
