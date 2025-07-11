@@ -545,7 +545,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case domainsLoadedMsg:
 		m.availableDomains = []string(msg)
 		m.selectedDomainIndex = 0
-		
+
 		// Check if there's a saved domain in state first
 		savedDomain := m.state.GetSelectedDomain()
 		if savedDomain != "" {
@@ -568,7 +568,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		
+
 		// Set the first domain as default if none selected and domains available
 		if len(m.availableDomains) > 0 {
 			selectedDomain := m.availableDomains[m.selectedDomainIndex]
