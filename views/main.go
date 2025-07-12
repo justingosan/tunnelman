@@ -62,6 +62,10 @@ type hostnameDeletedMsg struct {
 	message  string
 	tunnelID string
 }
+type hostnameAuthToggledMsg struct {
+	hostname models.PublicHostname
+	tunnelID string
+}
 
 func NewModel(state *models.AppState, client *models.CloudflareClient, tunnelManager *models.TunnelManager) Model {
 	return Model{
@@ -124,6 +128,25 @@ func (m Model) loadTunnelHostnames(tunnelID string) tea.Cmd {
 		}
 
 		return tunnelHostnamesLoadedMsg(hostnames)
+	})
+}
+
+func (m Model) toggleHostnameAuth(tunnelID, hostname string) tea.Cmd {
+	return tea.Cmd(func() tea.Msg {
+		if m.client == nil {
+			return errorMsg("Cloudflare client not initialized - check your API credentials")
+		}
+
+		ctx := context.Background()
+		updatedHostname, err := m.client.ToggleHostnameAuth(ctx, tunnelID, hostname)
+		if err != nil {
+			return errorMsg(fmt.Sprintf("Failed to toggle auth: %v", err))
+		}
+
+		return hostnameAuthToggledMsg{
+			hostname: *updatedHostname,
+			tunnelID: tunnelID,
+		}
 	})
 }
 
@@ -480,6 +503,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case "A": // Shift+A for auth toggle
+			if m.showTunnelHostnames && !m.showAddHostname && !m.showEditHostname && len(m.tunnelHostnames) > 0 {
+				hostname := m.tunnelHostnames[m.selectedHostnameIndex]
+				tunnel := m.tunnelsList[m.selectedTunnel]
+				m.statusMessage = "Toggling authentication..."
+				cmds = append(cmds, m.toggleHostnameAuth(tunnel.ID, hostname.Hostname))
+			}
+
 		case "e":
 			if m.showTunnelHostnames && !m.showAddHostname && len(m.tunnelHostnames) > 0 {
 				m.showEditHostname = true
@@ -625,6 +656,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Also update the domain count for this tunnel
 			cmds = append(cmds, m.updateSingleTunnelDomainCount(msg.tunnelID))
 		}
+
+	case hostnameAuthToggledMsg:
+		// Update the hostname in our local list
+		for i := range m.tunnelHostnames {
+			if m.tunnelHostnames[i].Hostname == msg.hostname.Hostname {
+				m.tunnelHostnames[i] = msg.hostname
+				break
+			}
+		}
+
+		authStatus := "disabled"
+		if msg.hostname.AuthEnabled {
+			authStatus = "enabled"
+		}
+		m.statusMessage = fmt.Sprintf("Authentication %s for %s", authStatus, msg.hostname.Hostname)
+		m.loading = false
 	}
 
 	return m, tea.Batch(cmds...)
@@ -1134,7 +1181,7 @@ func (m Model) renderTunnelHostnamesView() string {
 			Italic(true).
 			Align(lipgloss.Center).
 			Width(m.width - 8).
-			Render("Press 'a' to add, 'e' to edit, 'd' to delete, 'o' to open in browser • Spacebar/Escape to return to tunnels list")
+			Render("Press 'a' to add hostname • Spacebar/Escape to return to tunnels list")
 
 		content := lipgloss.JoinVertical(lipgloss.Center,
 			emptyStyle.Render("No public hostnames found for this tunnel"),
@@ -1155,7 +1202,7 @@ func (m Model) renderTunnelHostnamesView() string {
 		PaddingBottom(1).
 		MarginBottom(1)
 
-	header := headerStyle.Render(fmt.Sprintf("%-30s %-10s %-40s", "HOSTNAME", "PATH", "SERVICE"))
+	header := headerStyle.Render(fmt.Sprintf("%-30s %-10s %-40s %-8s", "HOSTNAME", "PATH", "SERVICE", "AUTH"))
 	rows = append(rows, header)
 
 	for i, hostname := range m.tunnelHostnames {
@@ -1184,12 +1231,40 @@ func (m Model) renderTunnelHostnamesView() string {
 			displayHostname = displayHostname[:27] + "..."
 		}
 
-		row := fmt.Sprintf("%-30s %-10s %-40s",
+		// Auth status display
+		authStatus := "🔓"
+		if hostname.AuthEnabled {
+			authStatus = "🔒"
+		}
+
+		row := fmt.Sprintf("%-30s %-10s %-40s %-8s",
 			displayHostname,
 			path,
-			service)
+			service,
+			authStatus)
 
 		rows = append(rows, style.Render(row))
+	}
+
+	// Show password and original service for selected hostname if auth is enabled
+	var passwordInfo string
+	if len(m.tunnelHostnames) > 0 && m.selectedHostnameIndex < len(m.tunnelHostnames) {
+		selectedHostname := m.tunnelHostnames[m.selectedHostnameIndex]
+		if selectedHostname.AuthEnabled && selectedHostname.AuthPassword != "" {
+			passwordStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#F59E0B")).
+				MarginTop(1).
+				Align(lipgloss.Center).
+				Width(m.width - 8)
+
+			// Show both password and original service
+			originalService := selectedHostname.OriginalService
+			if originalService == "" {
+				originalService = "http://localhost:8080" // fallback
+			}
+
+			passwordInfo = passwordStyle.Render(fmt.Sprintf("🔑 Auth: tunnelman:%s | 🎯 Original Service: %s", selectedHostname.AuthPassword, originalService))
+		}
 	}
 
 	backInfo := lipgloss.NewStyle().
@@ -1198,12 +1273,18 @@ func (m Model) renderTunnelHostnamesView() string {
 		Italic(true).
 		Align(lipgloss.Center).
 		Width(m.width - 8).
-		Render("Press 'a' to add, 'e' to edit, 'd' to delete, 'o' to open in browser • Spacebar/Escape to return to tunnels list")
+		Render("Press 'a' to add, 'e' to edit, 'd' to delete, 'A' to toggle auth, 'o' to open • Spacebar/Escape to return")
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinVertical(lipgloss.Left, rows...),
-		backInfo,
-	)
+	var contentParts []string
+	contentParts = append(contentParts, lipgloss.JoinVertical(lipgloss.Left, rows...))
+
+	if passwordInfo != "" {
+		contentParts = append(contentParts, passwordInfo)
+	}
+
+	contentParts = append(contentParts, backInfo)
+
+	content := lipgloss.JoinVertical(lipgloss.Left, contentParts...)
 
 	return lipgloss.JoinVertical(lipgloss.Left, title, content)
 }
@@ -1386,7 +1467,7 @@ func (m Model) renderFooter() string {
 	if m.showAddHostname || m.showEditHostname {
 		help = "Tab: Next field • Up/Down: Select domain • Enter: Submit • Escape: Cancel • q: Quit"
 	} else if m.showTunnelHostnames {
-		help = "a: Add hostname • e: Edit selected • d: Delete (with DNS) • Escape: Back to tunnels • r: Refresh • c: Clear errors • h: Help • q: Quit"
+		help = "a: Add hostname • e: Edit selected • d: Delete (with DNS) • Shift+A: Toggle auth • Escape: Back to tunnels • r: Refresh • c: Clear errors • h: Help • q: Quit"
 	} else {
 		help = "↑↓: Navigate • Enter/Space: View hostnames • d: Delete tunnel • Escape: Close help • r: Refresh • h: Help • q: Quit"
 	}
@@ -1428,6 +1509,7 @@ func (m Model) renderHelp() string {
 		fmt.Sprintf("  %s           %s", keyStyle.Render("a"), descStyle.Render("Add public hostname (in tunnel hostname view)")),
 		fmt.Sprintf("  %s           %s", keyStyle.Render("e"), descStyle.Render("Edit public hostname (in tunnel hostname view)")),
 		fmt.Sprintf("  %s           %s", keyStyle.Render("d"), descStyle.Render("Delete selected tunnel or hostname (with confirmation + DNS cleanup)")),
+		fmt.Sprintf("  %s         %s", keyStyle.Render("Shift+A"), descStyle.Render("Toggle authentication for selected hostname (6-digit password)")),
 		"",
 		"HOSTNAME OPERATIONS:",
 		fmt.Sprintf("  %s           %s", keyStyle.Render("Tab"), descStyle.Render("Navigate between hostname form fields")),

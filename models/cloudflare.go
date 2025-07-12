@@ -67,10 +67,13 @@ type WarpRouting struct {
 }
 
 type PublicHostname struct {
-	ID       string `json:"id"`
-	Hostname string `json:"hostname"`
-	Path     string `json:"path"`
-	Service  string `json:"service"`
+	ID              string `json:"id"`
+	Hostname        string `json:"hostname"`
+	Path            string `json:"path"`
+	Service         string `json:"service"`
+	AuthEnabled     bool   `json:"auth_enabled,omitempty"`
+	AuthPassword    string `json:"auth_password,omitempty"`
+	OriginalService string `json:"original_service,omitempty"`
 }
 
 type DNSRecordRequest struct {
@@ -297,7 +300,7 @@ func (c *CloudflareClient) createDNSRecordAPI(ctx context.Context, tunnelName, h
 
 	// Create the CNAME record pointing to the tunnel
 	tunnelTarget := fmt.Sprintf("%s.cfargotunnel.com", tunnelID)
-	
+
 	// Check if record already exists
 	existingRecords, _, err := c.api.ListDNSRecords(ctx, cloudflare.ZoneIdentifier(zoneID), cloudflare.ListDNSRecordsParams{
 		Name: hostname,
@@ -672,6 +675,136 @@ func (c *CloudflareClient) RemovePublicHostname(ctx context.Context, tunnelID, h
 	}
 
 	return c.UpdateTunnelConfiguration(ctx, tunnelID, &config.Config)
+}
+
+// ToggleHostnameAuth toggles authentication for a hostname by starting/stopping Traefik
+func (c *CloudflareClient) ToggleHostnameAuth(ctx context.Context, tunnelID, hostname string) (*PublicHostname, error) {
+	// Get current hostnames to find the one to toggle
+	hostnames, err := c.GetPublicHostnames(ctx, tunnelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hostnames: %w", err)
+	}
+
+	var targetHostname *PublicHostname
+	for i := range hostnames {
+		if hostnames[i].Hostname == hostname {
+			targetHostname = &hostnames[i]
+			break
+		}
+	}
+
+	if targetHostname == nil {
+		return nil, fmt.Errorf("hostname %s not found", hostname)
+	}
+
+	// Initialize Docker manager
+	dockerManager, err := NewDockerManager()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Docker manager: %w", err)
+	}
+	defer dockerManager.Close()
+
+	// Auto-detect auth state based on running container if AuthEnabled field is not set
+	if !targetHostname.AuthEnabled {
+		containerName := GetTraefikContainerName(hostname)
+		if dockerManager.IsContainerRunning(containerName) {
+			// Container is running, so auth should be enabled
+			targetHostname.AuthEnabled = true
+			// Get the container port and update service URL if needed
+			if port, err := dockerManager.GetContainerPort(containerName); err == nil {
+				expectedService := GetTraefikServiceURL(hostname, port)
+				if targetHostname.Service != expectedService {
+					// Service URL doesn't match expected Traefik URL, update it
+					targetHostname.Service = expectedService
+					c.UpdatePublicHostname(ctx, tunnelID, hostname, hostname, targetHostname.Path, expectedService)
+				}
+			}
+		} else if targetHostname.OriginalService != "" && strings.HasPrefix(targetHostname.Service, "http://localhost:") {
+			// Service points to localhost but container not running - inconsistent state
+			// Reset to original service
+			targetHostname.Service = targetHostname.OriginalService
+			targetHostname.AuthEnabled = false
+			// Update tunnel configuration to fix inconsistent state
+			c.UpdatePublicHostname(ctx, tunnelID, hostname, hostname, targetHostname.Path, targetHostname.Service)
+		}
+	}
+
+	// Check if Docker is available
+	if !dockerManager.IsDockerAvailable() {
+		return nil, fmt.Errorf("Docker is not available or running")
+	}
+
+	if targetHostname.AuthEnabled {
+		// Disable auth - stop Traefik and restore original service
+		if err := dockerManager.StopTraefikContainer(hostname); err != nil {
+			return nil, fmt.Errorf("failed to stop Traefik container: %w", err)
+		}
+
+		// Determine the service to restore to
+		originalService := targetHostname.OriginalService
+		if originalService == "" {
+			// If no original service stored, check if there's a running Traefik container
+			// If container is running, this indicates we're using Traefik, so use default
+			containerName := GetTraefikContainerName(hostname)
+			if dockerManager.IsContainerRunning(containerName) {
+				originalService = "http://localhost:8080" // Default fallback
+			} else {
+				// No Traefik container running, current service should be the original
+				originalService = targetHostname.Service
+			}
+		}
+
+		if err := c.UpdatePublicHostname(ctx, tunnelID, hostname, hostname, targetHostname.Path, originalService); err != nil {
+			return nil, fmt.Errorf("failed to update hostname service: %w", err)
+		}
+
+		// Update hostname struct
+		targetHostname.AuthEnabled = false
+		targetHostname.AuthPassword = ""
+		targetHostname.Service = originalService
+		// Keep OriginalService for potential future toggles
+
+	} else {
+		// Enable auth - generate password, start Traefik, update service URL
+		password, err := GenerateRandomPassword(6)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate password: %w", err)
+		}
+
+		// Store original service if not already stored
+		if targetHostname.OriginalService == "" {
+			// Only store if current service is not already a Traefik service
+			containerName := GetTraefikContainerName(hostname)
+			if !dockerManager.IsContainerRunning(containerName) {
+				// No Traefik container running, so current service is the original
+				targetHostname.OriginalService = targetHostname.Service
+			} else {
+				// Traefik container is running, use default as fallback
+				targetHostname.OriginalService = "http://localhost:8080"
+			}
+		}
+
+		// Start Traefik container
+		traefikPort, err := dockerManager.StartTraefikContainer(hostname, targetHostname.OriginalService, password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to start Traefik container: %w", err)
+		}
+
+		// Update tunnel to point to Traefik
+		traefikService := GetTraefikServiceURL(hostname, traefikPort)
+		if err := c.UpdatePublicHostname(ctx, tunnelID, hostname, hostname, targetHostname.Path, traefikService); err != nil {
+			// If tunnel update fails, stop the Traefik container
+			dockerManager.StopTraefikContainer(hostname)
+			return nil, fmt.Errorf("failed to update hostname service: %w", err)
+		}
+
+		// Update hostname struct
+		targetHostname.AuthEnabled = true
+		targetHostname.AuthPassword = password
+		targetHostname.Service = traefikService
+	}
+
+	return targetHostname, nil
 }
 
 // Status and Monitoring

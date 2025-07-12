@@ -10,6 +10,17 @@ Motivation: I like using Cloudflare Tunnels instead of other tools like ngok, lo
 
 PS: I've only tested this on macOS.
 
+## 🔐 New: Authentication Guards
+
+**NEW FEATURE** - Tunnelman now supports adding authentication guards to your tunnels!
+
+- **Instant Auth Protection**: Press `Shift+A` on any hostname to enable/disable authentication
+- **Automatic Setup**: Creates a Traefik reverse proxy with basic auth (6-digit password)
+- **Zero Config**: Automatically handles Docker containers and service routing
+- **Easy Access**: Displays both auth credentials and original service URL for easy copying
+
+Perfect for protecting development endpoints, internal tools, or any service that needs quick authentication without complex setup.
+
 ## Features
 
 - **Real-time Status** - view tunnel health (HEALTHY/DOWN) instantly
@@ -257,6 +268,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ### Latest Features
 
+- 🔐 **Authentication Guards**: One-click auth protection with Traefik reverse proxy
 - ✅ Domain dropdown for hostname creation
 - ✅ Improved table formatting and column alignment
 - ✅ Hierarchical escape key navigation
