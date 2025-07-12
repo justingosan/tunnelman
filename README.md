@@ -12,6 +12,7 @@ PS: I've only tested this on macOS.
 
 ## 🔐 New: Authentication Guards
 
+<img width="2490" height="1308" alt="image" src="https://github.com/user-attachments/assets/f9e34881-585a-48fc-b230-78724e720c1f" />
 **NEW FEATURE** - Tunnelman now supports adding authentication guards to your tunnels!
 
 - **Instant Auth Protection**: Press `Shift+A` on any hostname to enable/disable authentication
